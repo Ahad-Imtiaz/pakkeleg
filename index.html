@@ -1,0 +1,955 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Pakkeleg</title>
+<meta name="description" content="Play pakkeleg, the Danish Christmas gift game, with up to 12 players on their phones.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Figtree:wght@400;600;800&display=swap">
+<style>
+/* Layout: one candlelit round table fills the screen; a dock under it holds whatever you can do right now. Single committed evening look. */
+:root{
+  --night:#0e211b; --night2:#173229; --cloth:#8a1d24; --cloth2:#6e141b; --wood:#5a3519;
+  --cream:#f4ead6; --muted:#b9c6b8; --gold:#e9b54a; --gold2:#f7d98b; --ink:#1a120c;
+  --hit:#ffd36a; --line:rgba(244,234,214,.14); --panel:rgba(10,26,21,.86);
+  --display:"Bagel Fat One","Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-serif;
+  --body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--night);color:var(--cream);font-family:var(--body);font-size:15px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  background-image:radial-gradient(60% 45% at 50% 38%,rgba(233,181,74,.16),transparent 70%),radial-gradient(120% 80% at 50% 120%,var(--night2),var(--night));background-attachment:fixed}
+.wrap{max-width:620px;margin:0 auto;display:flex;flex-direction:column;gap:14px;padding-block:12px 28px}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(30px,8vw,42px);line-height:1;margin:0;color:var(--gold2);letter-spacing:.5px;text-shadow:0 2px 0 var(--cloth2)}
+h1 small{display:block;font-family:var(--body);font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);text-shadow:none;margin-top:4px}
+.pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:rgba(0,0,0,.25);border-radius:999px;padding:6px 12px;font-weight:600;font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pill b{color:var(--gold2)}
+.dot{width:8px;height:8px;border-radius:50%;background:#7d8a80}
+.dot.on{background:#79d68f;box-shadow:0 0 8px #79d68f}
+
+/* table */
+.stage{position:relative;width:100%;max-width:560px;aspect-ratio:1;margin:0 auto;user-select:none;-webkit-user-select:none}
+.table{position:absolute;inset:13%;border-radius:50%;
+  background:repeating-linear-gradient(45deg,rgba(255,255,255,.035) 0 2px,transparent 2px 6px),radial-gradient(circle at 50% 42%,#a52530,var(--cloth) 55%,var(--cloth2));
+  box-shadow:0 0 0 9px var(--wood),0 0 0 11px #3d220f,0 22px 50px rgba(0,0,0,.55),inset 0 0 40px rgba(0,0,0,.35)}
+.table::after{content:"";position:absolute;inset:8%;border-radius:50%;border:2px dashed rgba(247,217,139,.22)}
+.candle{position:absolute;left:50%;top:50%;width:5%;height:5%;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,#fff6d0,var(--gold) 45%,transparent 70%);filter:blur(1px);opacity:.0;transition:opacity .4s}
+.seat{position:absolute;width:19%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:2px;transition:left .5s,top .5s;z-index:3}
+.av{width:44%;aspect-ratio:1;max-width:100%;border-radius:50%;display:grid;place-items:center;font-weight:800;color:var(--ink);font-size:clamp(11px,3.4vw,17px);border:3px solid var(--night);box-shadow:0 0 0 2px var(--c,#ccc)}
+.seat.me .av{box-shadow:0 0 0 3px var(--gold2),0 0 14px var(--gold)}
+.seat.turn .av{animation:pulse 1s infinite}
+.seat.gone{opacity:.45}
+@keyframes pulse{50%{transform:scale(1.12)}}
+.nm{font-size:clamp(10px,2.7vw,12.5px);font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:rgba(0,0,0,.45);padding:1px 7px;border-radius:999px}
+.cnt{font-size:clamp(9px,2.4vw,11px);color:var(--gold2);font-weight:800;font-variant-numeric:tabular-nums}
+
+.gift{position:absolute;transform:translate(-50%,-50%);border-radius:14%;transition:left .65s cubic-bezier(.5,1.6,.5,1),top .65s cubic-bezier(.5,1.6,.5,1),box-shadow .2s;z-index:2;box-shadow:0 2px 4px rgba(0,0,0,.45);
+  background:var(--p);display:grid;place-items:center}
+.gift::before,.gift::after{content:"";position:absolute;background:var(--r)}
+.gift::before{left:42%;width:16%;top:0;bottom:0}
+.gift::after{top:42%;height:16%;left:0;right:0}
+.gift span{position:relative;z-index:1;font-size:clamp(7px,2.1vw,10px);font-weight:800;color:var(--ink);background:rgba(255,255,255,.85);border-radius:4px;padding:0 2px;line-height:1.2;font-variant-numeric:tabular-nums}
+.gift.pick{cursor:pointer;box-shadow:0 0 0 2px var(--hit),0 0 12px var(--hit);z-index:6}
+.gift.pick:hover,.gift.pick:focus-visible{outline:none;transform:translate(-50%,-50%) scale(1.25)}
+.gift.flash{animation:flash .9s}
+@keyframes flash{30%{transform:translate(-50%,-50%) scale(1.5)}}
+
+.dset{position:absolute;transform:translate(-50%,-50%);display:flex;gap:5px;z-index:5;transition:left .55s ease,top .55s ease;padding:4px;border-radius:12px}
+.dset.mine{background:rgba(255,211,106,.22);box-shadow:0 0 0 2px var(--hit)}
+.die{width:clamp(22px,6.5vw,34px);aspect-ratio:1;border-radius:22%;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:12%;box-shadow:inset 0 -3px 0 rgba(0,0,0,.18),0 3px 6px rgba(0,0,0,.4)}
+.die i{border-radius:50%;margin:14%;visibility:hidden}
+.die i.on{visibility:visible}
+.A .die{background:#fbf6ea}.A .die i{background:#b3202b}
+.B .die{background:#c42530}.B .die i{background:#fff}
+.die.tumble{animation:tumble .18s linear infinite}
+@keyframes tumble{0%{transform:rotate(0) translateY(0)}50%{transform:rotate(180deg) translateY(-4px)}100%{transform:rotate(360deg)}}
+.burst{position:absolute;transform:translate(-50%,-140%);font-family:var(--display);color:var(--hit);font-size:clamp(14px,4.4vw,22px);text-shadow:0 2px 0 var(--cloth2),0 0 10px rgba(0,0,0,.6);pointer-events:none;z-index:8;animation:burst 1.4s forwards;white-space:nowrap}
+@keyframes burst{0%{opacity:0;transform:translate(-50%,-80%) scale(.6)}15%{opacity:1;transform:translate(-50%,-150%) scale(1.15)}75%{opacity:1}100%{opacity:0;transform:translate(-50%,-190%)}}
+.center-msg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:52%;text-align:center;font-family:var(--display);font-size:clamp(15px,4.6vw,24px);color:var(--gold2);text-shadow:0 2px 0 var(--cloth2);pointer-events:none;z-index:4;text-wrap:balance}
+.center-msg small{display:block;font-family:var(--body);font-size:clamp(11px,3vw,13px);color:var(--cream);text-shadow:none;margin-top:6px;font-weight:600}
+
+/* dock & panels */
+.dock{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px;backdrop-filter:blur(6px)}
+.dock h2,.panel h2{font-family:var(--display);font-weight:400;font-size:22px;margin:0;color:var(--gold2);text-wrap:balance}
+.dock p{margin:0;color:var(--muted)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row > *{min-width:0}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);flex:1 1 140px}
+input[type=text],select{font:inherit;font-size:16px;color:var(--cream);background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0;text-transform:none;letter-spacing:0}
+input[type=text]:focus,select:focus{outline:2px solid var(--gold);outline-offset:1px}
+.chk{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--cream)}
+.chk input{width:18px;height:18px;accent-color:var(--gold)}
+button{font:inherit;font-weight:800;border:0;border-radius:12px;padding:11px 16px;cursor:pointer;background:rgba(244,234,214,.12);color:var(--cream);transition:transform .08s,filter .15s}
+button:hover{filter:brightness(1.15)}
+button:active{transform:scale(.97)}
+button:focus-visible{outline:2px solid var(--gold2);outline-offset:2px}
+button:disabled{opacity:.45;cursor:default;filter:none;transform:none}
+button.gold{background:var(--gold);color:var(--ink)}
+button.red{background:#c42530;color:#fff}
+button.sm{padding:6px 10px;font-size:12.5px;border-radius:9px}
+.roll{width:100%;font-family:var(--display);font-weight:400;font-size:clamp(24px,7vw,32px);padding:18px;border-radius:16px;letter-spacing:.5px;box-shadow:0 5px 0 rgba(0,0,0,.35)}
+.roll.A{background:#fbf6ea;color:#b3202b}
+.roll.B{background:#c42530;color:#fff}
+.roll small{display:block;font-family:var(--body);font-size:13px;font-weight:600;opacity:.8}
+.bar{height:6px;border-radius:6px;background:rgba(255,255,255,.12);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--hit);width:100%;transition:width .25s linear}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:7px 10px 7px 7px;border-radius:10px;background:rgba(244,234,214,.1);font-weight:800;font-size:14px;font-variant-numeric:tabular-nums}
+.chip .sw{width:20px;height:20px;border-radius:5px;background:var(--p);position:relative;overflow:hidden}
+.chip .sw::before{content:"";position:absolute;left:40%;width:20%;top:0;bottom:0;background:var(--r)}
+.owner{display:flex;flex-direction:column;gap:6px}
+.owner h3{margin:0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.log{display:flex;flex-direction:column;gap:3px;font-size:13.5px;color:var(--muted);min-height:3.5em}
+.log div:first-child{color:var(--cream);font-weight:600}
+.panel{border:1px solid var(--line);border-radius:18px;padding:14px 16px;background:rgba(0,0,0,.22)}
+.panel summary{cursor:pointer;font-weight:800;list-style:none;display:flex;justify-content:space-between;align-items:center}
+.panel summary::after{content:"+";font-family:var(--display);color:var(--gold)}
+.panel[open] summary::after{content:"–"}
+.panel .in{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+.seatlist{display:flex;flex-direction:column;gap:6px}
+.seatlist div{display:flex;align-items:center;gap:8px;justify-content:space-between;padding:6px 8px;border-radius:10px;background:rgba(244,234,214,.06)}
+.seatlist span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.sdot{width:12px;height:12px;border-radius:50%;flex:none;display:inline-block;margin-right:6px;vertical-align:-1px}
+.rules{color:var(--muted);font-size:14px;max-width:62ch}
+.rules p{margin:0}
+.rules b{color:var(--cream)}
+.results{display:flex;flex-direction:column;gap:6px}
+.results div{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:8px 10px;border-radius:10px;background:rgba(244,234,214,.07)}
+.warn{background:rgba(196,37,48,.25);border:1px solid rgba(196,37,48,.6);color:var(--cream);border-radius:12px;padding:10px 12px;font-size:14px}
+.note{font-size:12.5px;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+*,*::before,*::after{box-sizing:border-box}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+[hidden]{display:none!important}
+.sep{border-top:1px solid var(--line);margin-block:4px}
+.share{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.qr{background:var(--cream);padding:8px;border-radius:12px;line-height:0;flex:none}
+.qr:empty{display:none}
+.sharetxt{display:flex;flex-direction:column;gap:6px;min-width:0;flex:1 1 180px}
+.lbl{font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.code{font-family:var(--display);font-weight:400;font-size:44px;line-height:1;color:var(--gold2);letter-spacing:.12em}
+.link{word-break:break-all;margin:0}
+#codeIn{text-transform:uppercase;letter-spacing:.2em;font-weight:800}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>Pakkeleg<small>The Danish Christmas gift game</small></h1>
+    <div class="row">
+      <span class="pill" id="phasePill">Not at a table</span>
+      <span class="pill" id="netPill"><span class="dot" id="netDot"></span><span id="netTxt">Offline</span></span>
+    </div>
+  </header>
+
+  <div class="stage" id="stage" aria-label="The table">
+    <div class="table"></div>
+    <div class="center-msg" id="centerMsg">Pakkeleg<small>Up to 12 players. Two sets of dice.</small></div>
+    <div id="giftLayer"></div>
+    <div id="diceLayer"></div>
+    <div id="seatLayer"></div>
+  </div>
+
+  <section class="dock" id="dock" aria-live="polite"></section>
+
+  <div class="log" id="log"></div>
+
+  <details class="panel" id="hostPanel" hidden open>
+    <summary>Host controls</summary>
+    <div class="in"><div id="hostShare"></div><div class="in" id="hostIn" style="margin:0"></div></div>
+  </details>
+
+  <details class="panel">
+    <summary>How pakkeleg works</summary>
+    <div class="in rules">
+      <p>Everyone brings one to three small wrapped gifts. Number the real packages with stickers so they match the numbers on screen.</p>
+      <p><b>Round 1, the pile.</b> Two sets of dice start at opposite sides of the table and travel clockwise, one seat per roll. When you roll a hit, you take a gift from the pile. The round ends when the pile is empty.</p>
+      <p><b>Round 2, stealing.</b> The host starts a timer, secret by default. The dice keep moving, but now a hit lets you steal any gift from another player. When time runs out, everyone opens what's in front of them.</p>
+      <p><b>What counts as a hit</b> is set by the host: a 6 or doubles (default), any 6, doubles only, or double six only for a long, slow game.</p>
+      <p><b>House rules the host can switch on:</b> double 3 in round 2 moves every gift one seat to the left, and last-gift protection means nobody can steal someone's only gift.</p>
+      <p class="note">If a player doesn't roll in time, the game rolls for them so the dice never get stuck. Everyone plays on their own phone: open this site, type the table code and join. Playing on the same Wi-Fi gives the smoothest connection.</p>
+    </div>
+  </details>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+(() => {
+"use strict";
+// ---------- constants ----------
+const ANIM = 900, PICK_MS = 12000, AUTO = {r1: 25000, r2: 12000}, PASS = {r1: 1100, r2: 650};
+const MAX = 12;
+const SEATC = ["#f2a65a","#7fc8a9","#e98aa0","#8fb8f0","#f2d16b","#c5a3f0","#9fd36b","#f08f6b","#6fd3d3","#e0b8a0","#b8c86a","#f0a0d8"];
+const PAPER = [["#d43a3a","#f7d98b"],["#2f7a4f","#f4ead6"],["#f1e3c0","#c42530"],["#3c5fa8","#e9b54a"],["#e9b54a","#8a1d24"],["#7a3a7a","#f7d98b"],["#f4ead6","#2f7a4f"],["#b3202b","#ffffff"]];
+const BOTS = ["Pip","Klejner","Gløgg","Æbleskive","Brunkage","Pebernød","Marcipan","Risalamande","Kravlenisse","Julehjerte","Sne","Lys"];
+const RULES = {
+  sd: {label: "A 6 or doubles", fn: f => f[0] === 6 || f[1] === 6 || f[0] === f[1]},
+  s:  {label: "Any 6", fn: f => f[0] === 6 || f[1] === 6},
+  d:  {label: "Doubles only", fn: f => f[0] === f[1]},
+  ss: {label: "Double 6 only", fn: f => f[0] === 6 && f[1] === 6},
+};
+const PIPS = {1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ls = {
+  get(k){ try { return localStorage.getItem(k); } catch { return null; } },
+  set(k,v){ try { localStorage.setItem(k,v); } catch {} },
+  del(k){ try { localStorage.removeItem(k); } catch {} },
+};
+const rid = () => Math.random().toString(36).slice(2, 10);
+const r6 = () => { const a = new Uint32Array(1); crypto.getRandomValues(a); return 1 + (a[0] % 6); };
+
+// ---------- local identity ----------
+const me = { pid: ls.get("pk.pid") || rid(), name: ls.get("pk.name") || "" };
+ls.set("pk.pid", me.pid);
+
+let room = null, connected = false, roomState = "pending";
+let mode = "none";           // none | player | host
+let H = null;                // host engine {g, seq, seen, lastPub, dirty}
+let G = null;                // state being displayed
+let off = 0;                 // host clock - local clock
+let hostPeer = null, otherHost = false;
+const hostNow = () => Date.now() + off;
+
+// ---------- host engine ----------
+function newGame(playing){
+  const g = {v:1, born: Date.now(), hp: me.pid, ph: "lobby", s: [], o: [], d: [], end: 0, now: 0, log: [],
+    cfg: {gp: 2, rule: "sd", min: 10, hide: true, shift: true, last: false}};
+  if (playing) g.s.push({i: me.pid, n: me.name || "Host", c: 0});
+  return g;
+}
+function hostStart(g){
+  H = {g, seq: {}, seen: {}, lastPub: 0, dirty: true};
+  mode = "host"; off = 0; ls.del("pk.joined");
+  hostLoop();
+  publish(true);
+}
+function nextColor(g){ for (let c = 0; c < SEATC.length; c++) if (!g.s.some(s => s.c === c)) return c; return g.s.length % SEATC.length; }
+function log(g, t){ g.log.unshift({t: Date.now(), m: t}); if (g.log.length > 6) g.log.length = 6; }
+const sname = (g, i) => (g.s[i] ? g.s[i].n : "?");
+const owned = (g, seat) => g.o.reduce((a, o) => a + (o === seat ? 1 : 0), 0);
+const pileCount = g => g.o.filter(o => o === -1).length;
+function stealable(g, seat){
+  const out = [];
+  g.o.forEach((o, i) => { if (o >= 0 && o !== seat && (!g.cfg.last || owned(g, o) > 1)) out.push(i); });
+  return out;
+}
+function startGame(){
+  const g = H.g; if (g.s.length < 2) return;
+  g.o = Array(g.s.length * g.cfg.gp).fill(-1);
+  const n = g.s.length;
+  const mk = s => ({s, f:[r6(), r6()], k: 0, m: "w", at: Date.now(), h: 0, au: 0});
+  g.d = n >= 4 ? [mk(0), mk(Math.floor(n/2))] : [mk(0)];
+  g.ph = "r1"; g.end = 0; g.log = [];
+  log(g, `Round 1 starts with ${g.o.length} gifts in the pile`);
+  dirty();
+}
+function startSteal(){
+  const g = H.g; g.ph = "r2"; g.end = Date.now() + g.cfg.min * 60000;
+  g.d.forEach(d => { d.m = "w"; d.at = Date.now(); d.h = 0; });
+  log(g, "Round 2: stealing has started"); dirty();
+}
+function endGame(){ const g = H.g; g.ph = "end"; g.d.forEach(d => { d.m = "x"; }); log(g, "Time's up! Open your gifts"); dirty(); }
+function toLobby(){ const g = H.g; g.ph = "lobby"; g.o = []; g.d = []; g.log = []; g.end = 0; dirty(); }
+function dirty(){ if (H) { H.dirty = true; } }
+
+function doRoll(x, auto){
+  const g = H.g, d = g.d[x]; if (!d || d.m !== "w") return;
+  d.f = [r6(), r6()]; d.k++; d.at = Date.now(); d.au = auto ? 1 : 0;
+  const hit = RULES[g.cfg.rule].fn(d.f);
+  d.h = hit ? 1 : 0;
+  const who = sname(g, d.s);
+  if (g.ph === "r1") {
+    const reserved = g.d.filter(o => o !== d && o.m === "p").length;
+    if (hit && pileCount(g) - reserved > 0) { d.m = "p"; log(g, `${who} rolled ${d.f.join("–")} and gets a gift`); }
+    else { d.m = "r"; d.h = 0; log(g, `${who} rolled ${d.f.join("–")}`); }
+  } else if (g.ph === "r2") {
+    if (g.cfg.shift && d.f[0] === 3 && d.f[1] === 3) { d.m = "s"; d.h = 0; log(g, `${who} rolled double 3. Every gift moves one seat left`); }
+    else if (hit && stealable(g, d.s).length) { d.m = "p"; log(g, `${who} rolled ${d.f.join("–")} and gets to steal`); }
+    else { d.m = "r"; d.h = 0; log(g, `${who} rolled ${d.f.join("–")}`); }
+  }
+  dirty();
+}
+function doPick(x, gi){
+  const g = H.g, d = g.d[x]; if (!d || d.m !== "p") return false;
+  const seat = d.s;
+  if (g.ph === "r1") {
+    if (g.o[gi] !== -1) return false;
+    g.o[gi] = seat; log(g, `${sname(g, seat)} took gift #${gi + 1}`);
+  } else {
+    if (!stealable(g, seat).includes(gi)) return false;
+    const from = g.o[gi]; g.o[gi] = seat;
+    log(g, `${sname(g, seat)} stole #${gi + 1} from ${sname(g, from)}`);
+  }
+  d.m = "r"; d.at = Date.now() - ANIM;
+  if (g.ph === "r1" && pileCount(g) === 0) {
+    g.ph = "mid"; g.d.forEach(o => { o.m = "w"; o.at = Date.now(); o.h = 0; });
+    passOn(g, d);
+    log(g, "The pile is empty. Get ready to steal");
+  }
+  dirty(); return true;
+}
+function autoPick(x){
+  const g = H.g, d = g.d[x];
+  const opts = g.ph === "r1" ? g.o.map((o, i) => o === -1 ? i : -1).filter(i => i >= 0) : stealable(g, d.s);
+  if (!opts.length) { d.m = "r"; d.at = Date.now() - ANIM; dirty(); return; }
+  doPick(x, opts[Math.floor(Math.random() * opts.length)]);
+}
+function passOn(g, d){
+  const n = g.s.length; if (!n) return;
+  const other = g.d.find(o => o !== d);
+  let nx = (d.s + 1) % n;
+  if (other && nx === other.s && n > 1) nx = (nx + 1) % n;
+  d.s = nx; d.m = "w"; d.at = Date.now(); d.h = 0; d.au = 0;
+}
+function shiftAll(g){ const n = g.s.length; g.o = g.o.map(o => o >= 0 ? (o + 1) % n : o); }
+
+function hostHandle(pid, a){
+  const g = H.g; if (!a || typeof a !== "object") return;
+  const seat = g.s.findIndex(s => s.i === pid); if (seat < 0) return;
+  const d = g.d[a.x]; if (!d || d.s !== seat || a.k !== d.k) return;
+  if (a.t === "roll" && d.m === "w" && (g.ph === "r1" || g.ph === "r2")) doRoll(a.x, false);
+  else if (a.t === "pick" && d.m === "p" && Date.now() >= d.at + ANIM - 150) doPick(a.x, a.g | 0);
+}
+
+function hostTick(){
+  if (!H) return;
+  const g = H.g, now = Date.now();
+  // players' actions arrive as their presence field `a`; handle each new one once
+  if (room) for (const p of room.peers()) {
+    const pr = p.presence || {}, a = pr.a;
+    if (p.sameTab || typeof pr.pid !== "string" || !a || typeof a !== "object") continue;
+    if (!(a.q > (H.seq[pr.pid] || 0))) continue;
+    H.seq[pr.pid] = a.q;
+    if (a.b === g.born) hostHandle(pr.pid, a);
+  }
+  // seat players from the room while in the lobby
+  if (room && g.ph === "lobby") {
+    const peers = room.peers();
+    const present = new Set();
+    for (const p of peers) {
+      const pr = p.presence || {};
+      if (typeof pr.pid !== "string" || pr.pid.length > 16) continue;
+      present.add(pr.pid); H.seen[pr.pid] = now;
+      const nm = clean(pr.n) || "Player";
+      const s = g.s.find(x => x.i === pr.pid);
+      if (pr.want && !s && g.s.length < MAX) { g.s.push({i: pr.pid, n: nm, c: nextColor(g)}); log(g, `${nm} sat down`); dirty(); }
+      else if (s && !pr.want && pr.pid !== me.pid) { g.s.splice(g.s.indexOf(s), 1); dirty(); }
+      else if (s && s.n !== nm && pr.want) { s.n = nm; dirty(); }
+    }
+    for (let i = g.s.length - 1; i >= 0; i--) {
+      const s = g.s[i];
+      if (s.b || s.i === me.pid) continue;
+      if (!present.has(s.i) && now - (H.seen[s.i] || 0) > 5000) { g.s.splice(i, 1); dirty(); }
+    }
+  }
+  if (g.ph === "r1" || g.ph === "r2") {
+    if (g.ph === "r2" && now >= g.end) { endGame(); }
+    else g.d.forEach((d, x) => {
+      const seat = g.s[d.s];
+      if (d.m === "w") {
+        if (seat && seat.b && now >= d.at + 700 + Math.random() * 600) doRoll(x, false);
+        else if (now >= d.at + AUTO[g.ph]) doRoll(x, true);
+      } else if (d.m === "r" && now >= d.at + ANIM + PASS[g.ph]) { passOn(g, d); dirty(); }
+      else if (d.m === "s" && now >= d.at + ANIM + 300) { shiftAll(g); d.m = "r"; d.at = now - ANIM; dirty(); }
+      else if (d.m === "p") {
+        if (seat && seat.b && now >= d.at + ANIM + 900 + Math.random() * 700) autoPick(x);
+        else if (now >= d.at + ANIM + PICK_MS) autoPick(x);
+      }
+    });
+  }
+  const live = (g.ph === "r2" && now - H.lastPub > 1000) || now - H.lastPub > 5000;
+  if (H.dirty || live) publish(false);
+}
+function hostLoop(){ setInterval(hostTick, 200); }
+
+function publish(force){
+  if (!H) return;
+  H.g.now = Date.now(); H.dirty = false; H.lastPub = Date.now();
+  if (room) room.presence({pid: me.pid, n: me.name, want: null, a: null, g: H.g}).catch(() => {});
+  ls.set("pk.host", JSON.stringify(H.g));
+  setView(H.g, true);
+}
+
+// ---------- player side ----------
+function act(a){
+  a.q = Date.now(); a.b = G ? G.born : 0;
+  if (mode === "host") { hostHandle(me.pid, a); hostTick(); return; }
+  if (room) room.presence({a}).catch(() => {});
+}
+function joinTable(){
+  mode = "player"; ls.set("pk.joined", "1");
+  if (room) room.presence({pid: me.pid, n: me.name, want: 1}).catch(() => {});
+  render();
+}
+function leaveTable(){
+  mode = "none"; ls.del("pk.joined");
+  if (room) room.presence({want: null}).catch(() => {});
+  setTimeout(teardown, 400);
+  render();
+}
+function teardown(){
+  try { if (peerObj) peerObj.destroy(); } catch {}
+  peerObj = null; room = null; connected = false; G = null; hostPeer = null; netErr = "";
+  render();
+}
+
+function scanPeers(){
+  if (!room) return;
+  const peers = room.peers();
+  let best = null; otherHost = false;
+  for (const p of peers) {
+    const g = p.presence && p.presence.g;
+    if (!g || typeof g !== "object" || !Array.isArray(g.s)) continue;
+    if (p.sameTab) continue;
+    if (!best || g.born < best.presence.g.born) best = p;
+  }
+  if (mode === "host") { otherHost = !!best && best.presence.g.born < H.g.born; return; }
+  hostPeer = best;
+  if (best) {
+    const g = best.presence.g;
+    if (mode === "none" && g.s.some(s => s.i === me.pid)) joinTable();
+    if (!G || G !== g) { off = (g.now || Date.now()) - Date.now(); setView(g, false); }
+  } else if (G && mode !== "host") { setView(null, false); }
+}
+
+// ---------- view ----------
+const anim = {};        // per dice set: {k, until, born}
+const bursts = new Set();
+function setView(g, fromHost){
+  const prev = G; G = g;
+  if (g && g.d) g.d.forEach((d, x) => {
+    const key = g.born + ":" + x;
+    const a = anim[key];
+    if (!a) { anim[key] = {k: d.k, until: 0}; return; }
+    if (a.k !== d.k) {
+      a.k = d.k; a.until = Date.now() + ANIM; a.f = d.f.slice(); a.h = d.h; a.s = d.s;
+      sfx("rattle");
+      setTimeout(() => { if (a.h) { showBurst(x, g); } }, ANIM);
+    }
+  });
+  render();
+}
+
+function seatXY(i, n, base){
+  const ang = Math.PI / 2 + (i - base) * (2 * Math.PI / n);
+  return {a: ang, x: 50 + 42 * Math.cos(ang), y: 50 + 42 * Math.sin(ang)};
+}
+function mySeat(g){ return g ? g.s.findIndex(s => s.i === me.pid) : -1; }
+
+let seatSig = "";
+function renderTable(){
+  const g = G, seatL = $("seatLayer"), giftL = $("giftLayer"), diceL = $("diceLayer");
+  if (!g) { seatL.innerHTML = ""; giftL.innerHTML = ""; diceL.innerHTML = ""; seatSig = ""; return; }
+  const n = Math.max(g.s.length, 1), mine = mySeat(g), base = mine >= 0 ? mine : 0;
+  const counts = g.s.map((_, i) => owned(g, i));
+  const turnSeats = new Set(g.d.filter(d => d.m === "w" || d.m === "p").map(d => d.s));
+  // seats
+  const sig = g.born + "|" + g.s.map(s => s.i + s.n + s.c).join(",") + "|" + base;
+  if (sig !== seatSig) {
+    seatSig = sig;
+    seatL.innerHTML = g.s.map((s, i) => {
+      const p = seatXY(i, n, base);
+      return `<div class="seat${i === mine ? " me" : ""}" data-i="${i}" style="left:${p.x}%;top:${p.y}%;--c:${SEATC[s.c % SEATC.length]}">
+        <div class="av" style="background:${SEATC[s.c % SEATC.length]}">${esc((s.n || "?").slice(0, 2))}</div>
+        <div class="nm">${esc(s.n)}${s.b ? " ·bot" : ""}</div><div class="cnt"></div></div>`;
+    }).join("");
+  }
+  [...seatL.children].forEach((el, i) => {
+    el.classList.toggle("turn", turnSeats.has(i) && (g.ph === "r1" || g.ph === "r2"));
+    const c = el.querySelector(".cnt"); const t = g.o.length ? `${counts[i]} gift${counts[i] === 1 ? "" : "s"}` : "";
+    if (c.textContent !== t) c.textContent = t;
+  });
+  // gifts
+  const total = g.o.length;
+  while (giftL.children.length > total) giftL.lastChild.remove();
+  while (giftL.children.length < total) {
+    const i = giftL.children.length, pp = PAPER[(i * 5) % PAPER.length];
+    const el = document.createElement("div");
+    el.className = "gift"; el.dataset.g = i; el.tabIndex = -1;
+    el.style.setProperty("--p", pp[0]); el.style.setProperty("--r", pp[1]);
+    el.innerHTML = `<span>${i + 1}</span>`;
+    el.addEventListener("click", () => tryPick(i));
+    el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); tryPick(i); } });
+    giftL.appendChild(el);
+  }
+  const cols = Math.ceil(Math.sqrt(Math.max(total, 1)));
+  const gs = Math.min(8.5, 40 / cols);
+  const pile = [], per = {};
+  g.o.forEach((o, i) => { if (o === -1) pile.push(i); else (per[o] = per[o] || []).push(i); });
+  const pickable = pickChoices();
+  g.o.forEach((o, i) => {
+    const el = giftL.children[i];
+    let x, y, sz = gs;
+    if (o === -1) {
+      const k = i, r = Math.floor(k / cols), c = k % cols;
+      const rows = Math.ceil(total / cols);
+      x = 50 + (c - (cols - 1) / 2) * gs * 1.12; y = 50 + (r - (rows - 1) / 2) * gs * 1.12;
+    } else {
+      sz = Math.min(7, gs);
+      const list = per[o], k = list.indexOf(i), m = list.length;
+      const p = seatXY(o, n, base);
+      const perRow = 4, row = Math.floor(k / perRow), inRow = Math.min(perRow, m - row * perRow), col = k % perRow;
+      const cx = 50 + (28 - row * sz * 0.95) * Math.cos(p.a), cy = 50 + (28 - row * sz * 0.95) * Math.sin(p.a);
+      const t = (col - (inRow - 1) / 2) * sz * 1.05;
+      x = cx - Math.sin(p.a) * t; y = cy + Math.cos(p.a) * t;
+    }
+    el.style.left = x + "%"; el.style.top = y + "%"; el.style.width = el.style.height = sz + "%";
+    const can = pickable.includes(i);
+    el.classList.toggle("pick", can); el.tabIndex = can ? 0 : -1;
+    el.setAttribute("aria-label", `Gift ${i + 1}` + (can ? ", tap to take" : ""));
+    el.setAttribute("role", can ? "button" : "img");
+  });
+  // dice
+  while (diceL.children.length > g.d.length) diceL.lastChild.remove();
+  while (diceL.children.length < g.d.length) {
+    const x = diceL.children.length, el = document.createElement("div");
+    el.className = "dset " + (x ? "B" : "A");
+    el.innerHTML = [0, 1].map(() => `<div class="die">${"<i></i>".repeat(9)}</div>`).join("");
+    diceL.appendChild(el);
+  }
+  g.d.forEach((d, x) => {
+    const el = diceL.children[x], a = anim[g.born + ":" + x] || {};
+    const rolling = Date.now() < (a.until || 0);
+    const holder = rolling ? a.s : d.s;
+    const p = seatXY(holder, n, base);
+    el.style.left = (50 + 17 * Math.cos(p.a)) + "%"; el.style.top = (50 + 17 * Math.sin(p.a)) + "%";
+    el.classList.toggle("mine", holder === mine && d.m === "w" && !rolling && (g.ph === "r1" || g.ph === "r2"));
+    [...el.children].forEach((die, j) => {
+      const v = rolling ? r6() : (d.f[j] || 1);
+      die.classList.toggle("tumble", rolling);
+      [...die.children].forEach((pip, q) => pip.classList.toggle("on", PIPS[v].includes(q)));
+    });
+  });
+  // centre message
+  const cm = $("centerMsg");
+  let msg = "";
+  if (g.ph === "lobby") msg = `Table is open<small>${g.s.length} of ${MAX} seats taken</small>`;
+  else if (g.ph === "mid") msg = `Pile is empty<small>The host starts the stealing round</small>`;
+  else if (g.ph === "end") msg = `Glædelig jul!<small>Open your gifts</small>`;
+  else if (g.ph === "r1" && !pileCount(g)) msg = "";
+  setHTML(cm, msg); cm.hidden = !msg;
+}
+function setHTML(el, h){
+  if (el._h === h) return;
+  const a = document.activeElement, fid = a && el.contains(a) ? a.id : "";
+  const val = fid && a.value != null ? a.value : null;
+  el._h = h; el.innerHTML = h;
+  if (fid) { const n = document.getElementById(fid); if (n) { if (val != null) n.value = val; n.focus(); try { n.setSelectionRange(val.length, val.length); } catch {} } }
+}
+// live countdowns update text in place so buttons are never rebuilt mid-tap
+function tickCountdowns(){
+  document.querySelectorAll("[data-until]").forEach(el => {
+    const left = +el.dataset.until - hostNow();
+    const t = el.dataset.fmt === "clock" ? fmt(left) : String(Math.ceil(Math.max(0, left) / 1000));
+    if (el.textContent !== t) el.textContent = t;
+  });
+  document.querySelectorAll("[data-bar]").forEach(el => {
+    const left = +el.dataset.bar - hostNow();
+    el.style.width = Math.max(0, Math.min(100, left / +el.dataset.span * 100)) + "%";
+  });
+}
+const clean = s => String(s || "").replace(/[\u0000-\u001f\u007f-\u009f­​-‏‪-‮⁠-⁤﻿]/g, "").trim().slice(0, 14);
+
+function showBurst(x, g){
+  if (!G || G.born !== g.born) return;
+  const d = G.d[x]; if (!d) return;
+  const n = G.s.length, base = Math.max(mySeat(G), 0), p = seatXY(anim[G.born + ":" + x].s, n, base);
+  const el = document.createElement("div");
+  el.className = "burst";
+  el.textContent = G.ph === "r2" ? "Stjæl!" : "Pakke!";
+  el.style.left = (50 + 17 * Math.cos(p.a)) + "%"; el.style.top = (50 + 17 * Math.sin(p.a)) + "%";
+  $("stage").appendChild(el); setTimeout(() => el.remove(), 1500);
+  if (anim[G.born + ":" + x].s === mySeat(G)) { sfx("hit"); try { navigator.vibrate && navigator.vibrate([60, 40, 120]); } catch {} }
+}
+
+// what can I pick right now
+function myPickSet(){
+  const g = G; if (!g) return -1;
+  const ms = mySeat(g); if (ms < 0) return -1;
+  return g.d.findIndex((d, x) => d.m === "p" && d.s === ms && Date.now() >= ((anim[g.born + ":" + x] || {}).until || 0));
+}
+function pickChoices(){
+  const g = G, x = myPickSet(); if (x < 0) return [];
+  if (g.ph === "r1") return g.o.map((o, i) => o === -1 ? i : -1).filter(i => i >= 0);
+  return stealableView(g, g.d[x].s);
+}
+function stealableView(g, seat){
+  const cnt = {}; g.o.forEach(o => { cnt[o] = (cnt[o] || 0) + 1; });
+  return g.o.map((o, i) => (o >= 0 && o !== seat && (!g.cfg.last || cnt[o] > 1)) ? i : -1).filter(i => i >= 0);
+}
+const sentPick = {};
+function tryPick(i){
+  const x = myPickSet(); if (x < 0) return;
+  const d = G.d[x], key = G.born + ":" + x + ":" + d.k;
+  if (sentPick[key] || !pickChoices().includes(i)) return;
+  sentPick[key] = 1;
+  const el = $("giftLayer").children[i]; if (el) { el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); }
+  sfx("pick");
+  act({t: "pick", x, k: d.k, g: i});
+  render();
+}
+const sentRoll = {};
+function tryRoll(x){
+  const g = G, d = g && g.d[x]; if (!d) return;
+  const key = g.born + ":" + x + ":" + d.k;
+  if (sentRoll[key]) return; sentRoll[key] = 1;
+  unlockAudio();
+  act({t: "roll", x, k: d.k});
+  render();
+}
+
+function fmt(ms){ ms = Math.max(0, ms); const s = Math.ceil(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; }
+
+function renderDock(){
+  const dock = $("dock"), g = G;
+  const ms = mySeat(g);
+  let h = "";
+  const canHost = !hostPeer || mode === "host";
+  const saved = parseSaved();
+  if (mode === "none" || (mode === "player" && g && ms < 0 && (g.ph !== "lobby" || g.s.length >= MAX))) {
+    const nameField = `<label class="f" for="nameIn">Your name<input type="text" id="nameIn" maxlength="14" autocomplete="nickname" placeholder="e.g. Mormor" value="${esc(me.name)}"></label>`;
+    if (mode === "player" && g && ms < 0) {
+      h = `<h2>${g.s.length >= MAX ? "The table is full" : "The game is already running"}</h2><p>You're watching. You can join when the host takes everyone back to the lobby.</p><div class="row"><button id="leaveBtn">Leave</button></div>`;
+    } else {
+      h = `<h2>Join a table</h2><p>Type your name and the 4-letter code shown on the host's screen.</p>
+        <div class="row">${nameField}<label class="f" for="codeIn">Table code<input type="text" id="codeIn" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD" value="${esc(urlCode)}"></label></div>
+        <div class="row"><button class="gold" id="joinBtn">Join the table</button></div>
+        ${netErr ? `<div class="warn">${esc(netErr)}</div>` : ""}
+        <div class="sep"></div>
+        <h2>Or host the table</h2><p>The host's screen runs the game. A laptop or TV works well. Keep it open until the end.</p>
+        <label class="chk" for="hostPlays"><input type="checkbox" id="hostPlays" checked> I'm playing too (not just running the screen)</label>
+        <div class="row"><button id="hostBtn">Host a table</button>${saved ? `<button id="resumeBtn">Resume my last table</button>` : ""}</div>`;
+    }
+  } else if (!g) {
+    h = `<h2>${connected ? "Waiting for the host" : `Connecting to table ${esc(code)}…`}</h2><p>${esc(netErr || "If this takes long, check the code with the host and make sure their screen is open.")}</p><div class="row"><button id="leaveBtn">Leave</button></div>`;
+  } else if (g.ph === "lobby") {
+    h = (mode === "host" && ms < 0)
+      ? `<h2>You're running the table</h2><p>${g.s.length} player${g.s.length === 1 ? "" : "s"} seated. Others join on their phones with the code above. Start when everyone is in.</p>`
+      : ms >= 0
+      ? `<h2>You're seated</h2><p>${g.s.length} player${g.s.length === 1 ? "" : "s"} at the table. ${mode === "host" ? "Start when everyone is in." : "Waiting for the host to start."}</p><p class="note">Each player brings ${g.cfg.gp} gift${g.cfg.gp > 1 ? "s" : ""}. Hit: ${RULES[g.cfg.rule].label.toLowerCase()}.</p>`
+      : `<h2>Taking a seat…</h2><p>The host will seat you in a moment.</p>`;
+    if (mode === "player") h += `<div class="row"><button id="leaveBtn" class="sm">Leave table</button></div>`;
+  } else if (g.ph === "r1" || g.ph === "r2") {
+    const px = myPickSet();
+    const rx = g.d.findIndex((d, x) => d.s === ms && d.m === "w" && Date.now() >= ((anim[g.born + ":" + x] || {}).until || 0));
+    if (px >= 0) {
+      const d = g.d[px];
+      const choices = pickChoices();
+      if (g.ph === "r1") {
+        h = `<h2>Pakke! Pick a gift from the pile</h2><p>Tap a glowing gift on the table or below.</p>
+          <div class="chips">${choices.map(i => chip(i)).join("")}</div>`;
+      } else {
+        const by = {}; choices.forEach(i => (by[g.o[i]] = by[g.o[i]] || []).push(i));
+        h = `<h2>Stjæl! Steal a gift</h2><div class="owner">${Object.keys(by).map(o => `<h3>From ${esc(sname(g, +o))}</h3><div class="chips">${by[o].map(i => chip(i)).join("")}</div>`).join("")}</div>`;
+      }
+      const until = d.at + ANIM + PICK_MS;
+      h += `<div class="bar"><i data-bar="${until}" data-span="${PICK_MS}"></i></div><p class="note">A random gift is chosen for you in <span data-until="${until}"></span>s.</p>`;
+    } else if (rx >= 0) {
+      const d = g.d[rx];
+      h = `<button class="roll ${rx ? "B" : "A"}" id="rollBtn" data-x="${rx}">Slå! Roll<small>${rx ? "Red" : "White"} dice · auto-roll in <span data-until="${d.at + AUTO[g.ph]}"></span>s</small></button>`;
+    } else {
+      const holders = g.d.map(d => sname(g, d.s));
+      const myCount = ms >= 0 ? owned(g, ms) : 0;
+      h = `<h2>${g.ph === "r1" ? `${pileCount(g)} gift${pileCount(g) === 1 ? "" : "s"} left in the pile` : "Stealing round"}</h2>
+        <p>Dice are with ${holders.map(esc).join(" and ")}.${ms >= 0 ? ` You have ${myCount} gift${myCount === 1 ? "" : "s"}.` : ""}</p>
+        <p class="note">Hit: ${RULES[g.cfg.rule].label.toLowerCase()}.${g.ph === "r2" && g.cfg.shift ? " Double 3 moves every gift one seat left." : ""}</p>`;
+    }
+  } else if (g.ph === "mid") {
+    h = `<h2>All gifts are out</h2><p>${mode === "host" ? "Start the stealing round when everyone is ready." : "The host starts the stealing round next. The timer is " + (g.cfg.hide ? "secret." : g.cfg.min + " minutes.")}</p>`;
+    if (mode === "host") h += `<button class="roll B" id="stealBtn">Start stealing<small>${g.cfg.min} min${g.cfg.hide ? ", secret timer" : ""}</small></button>`;
+  } else if (g.ph === "end") {
+    const rows = g.s.map((s, i) => ({s, i, gifts: g.o.map((o, k) => o === i ? k + 1 : 0).filter(Boolean)}));
+    const mineList = g.o.map((o, k) => o === ms ? "#" + (k + 1) : "").filter(Boolean);
+    h = `<h2>Time's up. Open your gifts!</h2>${ms >= 0 ? `<p>${mineList.length ? `You won gift${mineList.length === 1 ? "" : "s"} ${mineList.join(", ")}.` : "You ended without a gift this time."}</p>` : ""}
+      <div class="results">${rows.map(r => `<div><span><span class="sdot" style="background:${SEATC[r.s.c % SEATC.length]}"></span>${esc(r.s.n)}</span><span class="cnt">${r.gifts.length ? r.gifts.map(x => "#" + x).join(" ") : "no gifts"}</span></div>`).join("")}</div>`;
+    if (mode === "host") h += `<button class="gold" id="againBtn">Play again</button>`;
+  }
+  if (otherHost) h = `<div class="warn">Someone else opened a table on this page first. Only one table works at a time, so ask them to close theirs or join it instead.</div>` + h;
+  setHTML(dock, h);
+}
+function chip(i){
+  const pp = PAPER[(i * 5) % PAPER.length];
+  return `<button class="chip" data-gift="${i}" style="--p:${pp[0]};--r:${pp[1]}"><span class="sw"></span>#${i + 1}</button>`;
+}
+
+function renderHost(){
+  const panel = $("hostPanel");
+  panel.hidden = mode !== "host";
+  if (mode !== "host") return;
+  const g = H.g, lobby = g.ph === "lobby";
+  const sel = (id, opts, v) => `<select id="${id}">${opts.map(([k, l]) => `<option value="${k}"${String(k) === String(v) ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
+  let h = "";
+  if (lobby) {
+    h += `<div class="row">
+      <label class="f" for="cfgGp">Gifts per player${sel("cfgGp", [[1,"1"],[2,"2"],[3,"3"]], g.cfg.gp)}</label>
+      <label class="f" for="cfgRule">A hit is${sel("cfgRule", Object.entries(RULES).map(([k, r]) => [k, r.label]), g.cfg.rule)}</label>
+      <label class="f" for="cfgMin">Stealing timer${sel("cfgMin", [[2,"2 min"],[5,"5 min"],[8,"8 min"],[10,"10 min"],[15,"15 min"],[20,"20 min"]], g.cfg.min)}</label></div>
+      <label class="chk" for="cfgHide"><input type="checkbox" id="cfgHide"${g.cfg.hide ? " checked" : ""}> Keep the timer secret from players</label>
+      <label class="chk" for="cfgShift"><input type="checkbox" id="cfgShift"${g.cfg.shift ? " checked" : ""}> Double 3 in round 2 moves every gift one seat left</label>
+      <label class="chk" for="cfgLast"><input type="checkbox" id="cfgLast"${g.cfg.last ? " checked" : ""}> Nobody can steal a player's last gift</label>
+      <div class="row"><button class="gold" id="startBtn"${g.s.length < 2 ? " disabled" : ""}>Start round 1 (${g.s.length * g.cfg.gp} gifts)</button>
+      <button id="botBtn"${g.s.length >= MAX ? " disabled" : ""}>Add a bot</button></div>
+      ${g.s.length < 2 ? `<p class="note">You need at least 2 players. Add a bot to try it alone.</p>` : `<p class="note">${g.s.length >= 4 ? "Two sets of dice will start at opposite seats." : "With fewer than 4 players one set of dice is used."}</p>`}`;
+  } else {
+    if (g.ph === "r2") h += `<p class="pill" style="align-self:flex-start">Timer <b data-until="${g.end}" data-fmt="clock"></b></p>`;
+    h += `<div class="row">${g.ph === "r2" ? `<button class="red sm" id="endBtn">End now</button><button class="sm" id="plusBtn">+1 minute</button>` : ""}<button class="sm" id="lobbyBtn">Back to lobby</button></div>`;
+  }
+  h += `<div class="seatlist">${g.s.map((s, i) => `<div><span><span class="sdot" style="background:${SEATC[s.c % SEATC.length]}"></span>${esc(s.n)}${s.b ? " (bot)" : ""}${s.i === me.pid ? " (you)" : ""}</span>
+    ${s.i !== me.pid ? (lobby ? `<button class="sm" data-kick="${i}">Remove</button>` : (s.b ? "" : `<button class="sm" data-bot="${i}">Let a bot play</button>`)) : ""}</div>`).join("")}</div>
+    <p class="note">Keep this page open until the game ends. It runs the table.</p>`;
+  setHTML($("hostIn"), h);
+}
+
+let lastLog = "";
+function renderTop(){
+  const g = G, pill = $("phasePill");
+  let t = "Not at a table";
+  if (g) {
+    if (g.ph === "lobby") t = `Lobby · <b>${g.s.length}</b>/${MAX}`;
+    else if (g.ph === "r1") t = `Round 1 · pile <b>${pileCount(g)}</b>`;
+    else if (g.ph === "mid") t = "Break";
+    else if (g.ph === "r2") t = (g.cfg.hide && mode !== "host") ? "Round 2 · secret timer" : `Round 2 · <b>${fmt(g.end - hostNow())}</b>`;
+    else if (g.ph === "end") t = "Game over";
+  }
+  setHTML(pill, t);
+  $("netDot").classList.toggle("on", !!room && connected);
+  $("netTxt").textContent = !room ? (code && mode !== "none" ? "Connecting" : "Not connected") : mode === "host" ? `Table ${code} · ${room.peers().length - 1} phones` : connected ? `Table ${code}` : "Reconnecting";
+  // log: hide entries younger than the dice animation so results aren't spoiled
+  const lg = g ? g.log.filter(e => e.t + ANIM <= hostNow()).slice(0, 3) : [];
+  const lh = lg.map(e => `<div>${esc(e.m)}</div>`).join("");
+  if (lh !== lastLog) { lastLog = lh; $("log").innerHTML = lh; }
+}
+
+function render(){ renderTable(); renderDock(); renderHost(); renderTop(); tickCountdowns(); }
+setInterval(() => { if (G || mode !== "none") render(); }, 250);
+
+// ---------- events ----------
+document.addEventListener("click", e => {
+  const t = e.target.closest("button"); if (!t) return;
+  unlockAudio();
+  const id = t.id;
+  if (id === "joinBtn" || id === "hostBtn") {
+    const v = clean($("nameIn").value);
+    if (!v) { $("nameIn").focus(); $("nameIn").placeholder = "Type your name first"; return; }
+    me.name = v; ls.set("pk.name", v);
+  }
+  if (id === "joinBtn") {
+    const c = ($("codeIn").value || "").toUpperCase().replace(/[^A-Z]/g, "");
+    if (c.length !== 4) { $("codeIn").focus(); netErr = "The table code has 4 letters."; render(); return; }
+    startJoin(c);
+  }
+  else if (id === "hostBtn") { hostStart(newGame($("hostPlays").checked)); hostNet(newCode(), 5); }
+  else if (id === "resumeBtn") { const s = parseSaved(); if (s) { hostStart(s); hostNet(ls.get("pk.hostcode") || newCode(), 0); } }
+  else if (id === "copyBtn") { const l = shareLink(); try { navigator.clipboard.writeText(l).then(() => { t.textContent = "Link copied"; }, () => {}); } catch {} }
+  else if (id === "leaveBtn") leaveTable();
+  else if (id === "rollBtn") tryRoll(+t.dataset.x);
+  else if (t.dataset.gift != null) tryPick(+t.dataset.gift);
+  else if (!H) return;
+  else if (id === "startBtn") startGame();
+  else if (id === "botBtn") { const g = H.g; const used = new Set(g.s.map(s => s.n)); const nm = BOTS.find(b => !used.has(b)) || "Nisse"; g.s.push({i: "bot" + rid().slice(0, 5), n: nm, c: nextColor(g), b: 1}); dirty(); hostTick(); }
+  else if (id === "stealBtn") startSteal();
+  else if (id === "endBtn") endGame();
+  else if (id === "plusBtn") { H.g.end += 60000; dirty(); }
+  else if (id === "lobbyBtn" || id === "againBtn") toLobby();
+  else if (t.dataset.kick != null) { const s = H.g.s[+t.dataset.kick]; if (s) { H.g.s.splice(+t.dataset.kick, 1); dirty(); } }
+  else if (t.dataset.bot != null) { const s = H.g.s[+t.dataset.bot]; if (s) { s.b = 1; dirty(); } }
+  if (H) hostTick();
+  render();
+});
+document.addEventListener("change", e => {
+  if (!H || H.g.ph !== "lobby") return;
+  const c = H.g.cfg, t = e.target;
+  if (t.id === "cfgGp") c.gp = +t.value;
+  else if (t.id === "cfgRule") c.rule = RULES[t.value] ? t.value : "sd";
+  else if (t.id === "cfgMin") c.min = +t.value;
+  else if (t.id === "cfgHide") c.hide = t.checked;
+  else if (t.id === "cfgShift") c.shift = t.checked;
+  else if (t.id === "cfgLast") c.last = t.checked;
+  else return;
+  dirty(); hostTick();
+});
+document.addEventListener("keydown", e => {
+  if ((e.key === " " || e.key === "Enter") && document.activeElement === document.body) {
+    const b = $("rollBtn"); if (b) { e.preventDefault(); b.click(); }
+  }
+});
+
+function parseSaved(){
+  try {
+    const s = JSON.parse(ls.get("pk.host") || "null");
+    if (s && s.v === 1 && Array.isArray(s.s) && Date.now() - (s.now || 0) < 6 * 3600e3 && s.ph !== "lobby") return s;
+  } catch {}
+  return null;
+}
+
+// ---------- sound ----------
+let ac = null;
+function unlockAudio(){ if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch {} } if (ac && ac.state === "suspended") ac.resume().catch(() => {}); }
+function sfx(kind){
+  if (!ac || ac.state !== "running") return;
+  const t0 = ac.currentTime;
+  const tone = (f, at, dur, type, vol) => {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.value = f; g.gain.setValueAtTime(vol, t0 + at); g.gain.exponentialRampToValueAtTime(.0001, t0 + at + dur);
+    o.connect(g).connect(ac.destination); o.start(t0 + at); o.stop(t0 + at + dur + .02);
+  };
+  if (kind === "rattle") for (let i = 0; i < 7; i++) tone(500 + Math.random() * 900, i * .11 + Math.random() * .04, .04, "square", .03);
+  if (kind === "hit") { tone(784, 0, .18, "triangle", .12); tone(1046, .12, .3, "triangle", .12); tone(1318, .24, .4, "triangle", .1); }
+  if (kind === "pick") tone(660, 0, .12, "sine", .1);
+}
+
+// ---------- network: PeerJS tables with 4-letter codes ----------
+// The host's browser is the table. Phones connect straight to it; the public PeerJS
+// service only introduces them. The objects below mimic a small "room": peers() lists
+// everyone with a presence object, presence(patch) shares yours.
+const PREFIX = "pakkeleg-dk-v1-";
+const ALPH = "ABCDEFGHJKMNPQRSTUVWXYZ";
+let peerObj = null, code = "", netErr = "";
+const urlCode = (new URLSearchParams(location.search).get("t") || ls.get("pk.code") || "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
+const newCode = () => Array.from({length: 4}, () => ALPH[Math.floor(Math.random() * ALPH.length)]).join("");
+const merge = (a, p) => { const o = Object.assign({}, a); for (const k in p) { if (p[k] === null) delete o[k]; else o[k] = p[k]; } return o; };
+const hasPeerJS = () => typeof window.Peer === "function";
+const NOLIB = "Couldn't load the connection service. Check the internet connection and reload.";
+function shareLink(){ return location.origin + location.pathname + "?t=" + code; }
+
+function baseRoom(){
+  const L = {p: [], c: []};
+  const r = {_snap: [],
+    peers(){ return r._snap; },
+    onPeers(f){ L.p.push(f); setTimeout(() => f({peers: r._snap}), 0); return () => {}; },
+    onConnection(f){ L.c.push(f); setTimeout(() => f(connected), 0); return () => {}; }};
+  r.firePeers = () => L.p.forEach(f => { try { f({peers: r._snap}); } catch (e) { console.error(e); } });
+  r.fireConn = c => { connected = c; L.c.forEach(f => { try { f(c); } catch (e) { console.error(e); } }); };
+  return r;
+}
+function hostRoom(peer){
+  const r = baseRoom(), conns = new Map(); let mine = {};
+  const rebuild = () => {
+    r._snap = [{peer: "host", sameTab: true, isMe: true, presence: mine}]
+      .concat([...conns].map(([id, e]) => ({peer: id, sameTab: false, isMe: false, presence: e.p})));
+    r.firePeers();
+  };
+  r.presence = patch => {
+    mine = merge(mine, patch);
+    const msg = {t: "hp", p: mine};
+    conns.forEach(e => { if (e.c.open) { try { e.c.send(msg); } catch {} } });
+    rebuild(); return Promise.resolve();
+  };
+  peer.on("connection", c => {
+    c.on("open", () => {
+      if (conns.size >= 40) { c.close(); return; }
+      conns.set(c.peer, {c, p: {}});
+      try { c.send({t: "hp", p: mine}); } catch {}
+      rebuild();
+    });
+    c.on("data", m => {
+      const e = conns.get(c.peer);
+      if (!e || !m || m.t !== "p" || !m.p || typeof m.p !== "object") return;
+      e.p = merge(e.p, m.p); rebuild();
+    });
+    c.on("close", () => { conns.delete(c.peer); rebuild(); });
+    c.on("error", () => {});
+  });
+  connected = true; rebuild();
+  return r;
+}
+function playerRoom(peer, hostId){
+  const r = baseRoom(); let mine = {}, hostP = null, c = null, timer = null;
+  const rebuild = () => {
+    r._snap = [{peer: "me", sameTab: true, isMe: true, presence: mine}]
+      .concat(hostP ? [{peer: hostId, sameTab: false, isMe: false, presence: hostP}] : []);
+    r.firePeers();
+  };
+  const connect = () => {
+    clearTimeout(timer);
+    if (peer.destroyed || peerObj !== peer) return;
+    c = peer.connect(hostId, {serialization: "json", reliable: true});
+    const mineConn = c;
+    c.on("open", () => { netErr = ""; r.fireConn(true); try { mineConn.send({t: "p", p: mine}); } catch {} });
+    c.on("data", m => { if (m && m.t === "hp" && m.p && typeof m.p === "object") { hostP = m.p; rebuild(); } });
+    c.on("close", () => { if (c !== mineConn) return; r.fireConn(false); hostP = null; rebuild(); r.retry(); });
+    c.on("error", () => {});
+  };
+  r.retry = () => { clearTimeout(timer); timer = setTimeout(connect, 3500); };
+  r.presence = patch => {
+    mine = merge(mine, patch);
+    if (c && c.open) { try { c.send({t: "p", p: patch}); } catch {} }
+    rebuild(); return Promise.resolve();
+  };
+  connect(); rebuild();
+  return r;
+}
+function wire(r){
+  r.onConnection(c => { if (c && H) publish(true); render(); });
+  r.onPeers(() => { scanPeers(); if (H) hostTick(); render(); });
+}
+function hostNet(c, tries){
+  if (!hasPeerJS()) { netErr = NOLIB; renderShare(); render(); return; }
+  code = c;
+  const peer = new Peer(PREFIX + c, Object.assign({debug: 0}, window.PK_PEER_OPTS || {}));
+  peerObj = peer;
+  renderShare();
+  peer.on("open", () => {
+    if (peerObj !== peer) return;
+    netErr = ""; room = hostRoom(peer); wire(room);
+    ls.set("pk.hostcode", c);
+    renderShare(); publish(true); render();
+  });
+  peer.on("disconnected", () => { if (!peer.destroyed) { try { peer.reconnect(); } catch {} } });
+  peer.on("error", e => {
+    if (e.type === "unavailable-id") {
+      peer.destroy();
+      if (tries < 5) setTimeout(() => hostNet(c, tries + 1), 3000); else hostNet(newCode(), 5);
+      return;
+    }
+    if (["network", "server-error", "socket-error", "socket-closed"].includes(e.type)) { netErr = "Lost touch with the connection service. Retrying…"; renderShare(); render(); }
+  });
+}
+function startJoin(c){
+  if (!hasPeerJS()) { netErr = NOLIB; render(); return; }
+  try { if (peerObj) peerObj.destroy(); } catch {}
+  room = null; connected = false;
+  code = c; netErr = ""; ls.set("pk.code", c);
+  mode = "player"; ls.set("pk.joined", "1");
+  const peer = new Peer(undefined, Object.assign({debug: 0}, window.PK_PEER_OPTS || {}));
+  peerObj = peer;
+  peer.on("open", () => {
+    if (peerObj !== peer) return;
+    if (!room) { room = playerRoom(peer, PREFIX + c); wire(room); }
+    room.presence({pid: me.pid, n: me.name, want: 1});
+  });
+  peer.on("disconnected", () => { if (!peer.destroyed) { try { peer.reconnect(); } catch {} } });
+  peer.on("error", e => {
+    if (e.type === "peer-unavailable") { netErr = `No open table with code ${c}. Check the code with the host. Trying again…`; if (room) room.retry(); }
+    else if (["network", "server-error", "socket-error", "socket-closed"].includes(e.type)) netErr = "Connection problem. Retrying…";
+    render();
+  });
+  render();
+}
+function renderShare(){
+  const el = $("hostShare"); if (!el) return;
+  if (mode !== "host") { el.innerHTML = ""; return; }
+  if (!room) { el.innerHTML = netErr ? `<div class="warn">${esc(netErr)}</div>` : `<p class="note">Opening the table…</p>`; return; }
+  const link = shareLink();
+  el.innerHTML = `<div class="share"><div class="qr" id="qr" aria-label="QR code for the invite link"></div>
+    <div class="sharetxt"><span class="lbl">Table code</span><b class="code">${esc(code)}</b>
+    <p class="note">Players open this site and type the code, or scan the QR code.</p>
+    <div class="row"><button class="sm" id="copyBtn">Copy invite link</button></div>
+    <p class="note link">${esc(link)}</p></div></div>${netErr ? `<div class="warn">${esc(netErr)}</div>` : ""}`;
+  if (window.QRCode) { try { new QRCode($("qr"), {text: link, width: 132, height: 132, colorDark: "#1a120c", colorLight: "#f4ead6"}); } catch {} }
+}
+
+render();
+// a player who reloads goes straight back to their table
+if (ls.get("pk.joined") === "1" && ls.get("pk.code") && me.name) startJoin(ls.get("pk.code"));
+})();
+</script>
+</body>
+</html>
