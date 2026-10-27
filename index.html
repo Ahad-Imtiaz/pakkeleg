@@ -177,7 +177,7 @@ body{margin:0}
   </details>
 </div>
 
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
 (() => {
@@ -395,8 +395,9 @@ function leaveTable(){
   render();
 }
 function teardown(){
-  try { if (peerObj) peerObj.destroy(); } catch {}
-  peerObj = null; room = null; connected = false; G = null; hostPeer = null; netErr = "";
+  clients.forEach(c => { try { if (myTopic && c.connected) c.publish(myTopic, "", {retain: true, qos: 0}); } catch {} });
+  setTimeout(closeAll, 300);
+  room = null; connected = false; G = null; hostPeer = null; netErr = "";
   render();
 }
 
@@ -720,7 +721,7 @@ function renderTop(){
   }
   setHTML(pill, t);
   $("netDot").classList.toggle("on", !!room && connected);
-  $("netTxt").textContent = !room ? (code && mode !== "none" ? "Connecting" : "Not connected") : mode === "host" ? `Table ${code} · ${room.peers().length - 1} phones` : connected ? `Table ${code}` : "Reconnecting";
+  $("netTxt").textContent = !room ? (code && mode !== "none" ? "Connecting" : "Not connected") : mode === "host" ? `Table ${code} · ${room.peers().length - 1} phones` : connected ? `Table ${code}` : (G ? "Reconnecting" : "Looking for table");
   // log: hide entries younger than the dice animation so results aren't spoiled
   const lg = g ? g.log.filter(e => e.t + ANIM <= hostNow()).slice(0, 3) : [];
   const lh = lg.map(e => `<div>${esc(e.m)}</div>`).join("");
@@ -805,19 +806,24 @@ function sfx(kind){
   if (kind === "pick") tone(660, 0, .12, "sine", .1);
 }
 
-// ---------- network: PeerJS tables with 4-letter codes ----------
-// The host's browser is the table. Phones connect straight to it; the public PeerJS
-// service only introduces them. The objects below mimic a small "room": peers() lists
-// everyone with a presence object, presence(patch) shares yours.
-const PREFIX = "pakkeleg-dk-v1-";
+// ---------- network: public MQTT relay with 4-letter table codes ----------
+// The host's browser runs the table. Everyone talks through a public message server over a
+// secure web socket, so it works on any Wi-Fi or mobile network. The host's state is kept as a
+// retained message, so a phone that joins late gets the table at once. The objects below mimic
+// a small "room": peers() lists everyone with a presence object, presence(patch) shares yours.
+const BROKERS = ["wss://broker.emqx.io:8084/mqtt", "wss://broker.hivemq.com:8884/mqtt", "wss://test.mosquitto.org:8081/mqtt"];
+const TOPIC = c => "pakkeleg-dk-v1/" + c;
 const ALPH = "ABCDEFGHJKMNPQRSTUVWXYZ";
-let peerObj = null, code = "", netErr = "";
+let clients = [], code = "", netErr = "", lookTimer = null, myTopic = "";
 const urlCode = (new URLSearchParams(location.search).get("t") || ls.get("pk.code") || "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
 const newCode = () => Array.from({length: 4}, () => ALPH[Math.floor(Math.random() * ALPH.length)]).join("");
 const merge = (a, p) => { const o = Object.assign({}, a); for (const k in p) { if (p[k] === null) delete o[k]; else o[k] = p[k]; } return o; };
-const hasPeerJS = () => typeof window.Peer === "function";
+const hasLib = () => !!(window.mqtt && typeof window.mqtt.connect === "function");
 const NOLIB = "Couldn't load the connection service. Check the internet connection and reload.";
+const dec = pl => { try { const t = pl && pl.length ? pl.toString() : ""; return t ? JSON.parse(t) : null; } catch { return null; } };
+const opts = will => ({clientId: "pk_" + rid() + rid(), clean: true, keepalive: 20, reconnectPeriod: 3000, connectTimeout: 9000, will});
 function shareLink(){ return location.origin + location.pathname + "?t=" + code; }
+function closeAll(){ clients.forEach(c => { try { c.end(true); } catch {} }); clients = []; clearTimeout(lookTimer); }
 
 function baseRoom(){
   const L = {p: [], c: []};
@@ -826,111 +832,95 @@ function baseRoom(){
     onPeers(f){ L.p.push(f); setTimeout(() => f({peers: r._snap}), 0); return () => {}; },
     onConnection(f){ L.c.push(f); setTimeout(() => f(connected), 0); return () => {}; }};
   r.firePeers = () => L.p.forEach(f => { try { f({peers: r._snap}); } catch (e) { console.error(e); } });
-  r.fireConn = c => { connected = c; L.c.forEach(f => { try { f(c); } catch (e) { console.error(e); } }); };
-  return r;
-}
-function hostRoom(peer){
-  const r = baseRoom(), conns = new Map(); let mine = {};
-  const rebuild = () => {
-    r._snap = [{peer: "host", sameTab: true, isMe: true, presence: mine}]
-      .concat([...conns].map(([id, e]) => ({peer: id, sameTab: false, isMe: false, presence: e.p})));
-    r.firePeers();
-  };
-  r.presence = patch => {
-    mine = merge(mine, patch);
-    const msg = {t: "hp", p: mine};
-    conns.forEach(e => { if (e.c.open) { try { e.c.send(msg); } catch {} } });
-    rebuild(); return Promise.resolve();
-  };
-  peer.on("connection", c => {
-    c.on("open", () => {
-      if (conns.size >= 40) { c.close(); return; }
-      conns.set(c.peer, {c, p: {}});
-      try { c.send({t: "hp", p: mine}); } catch {}
-      rebuild();
-    });
-    c.on("data", m => {
-      const e = conns.get(c.peer);
-      if (!e || !m || m.t !== "p" || !m.p || typeof m.p !== "object") return;
-      e.p = merge(e.p, m.p); rebuild();
-    });
-    c.on("close", () => { conns.delete(c.peer); rebuild(); });
-    c.on("error", () => {});
-  });
-  connected = true; rebuild();
-  return r;
-}
-function playerRoom(peer, hostId){
-  const r = baseRoom(); let mine = {}, hostP = null, c = null, timer = null;
-  const rebuild = () => {
-    r._snap = [{peer: "me", sameTab: true, isMe: true, presence: mine}]
-      .concat(hostP ? [{peer: hostId, sameTab: false, isMe: false, presence: hostP}] : []);
-    r.firePeers();
-  };
-  const connect = () => {
-    clearTimeout(timer);
-    if (peer.destroyed || peerObj !== peer) return;
-    c = peer.connect(hostId, {serialization: "json", reliable: true});
-    const mineConn = c;
-    c.on("open", () => { netErr = ""; r.fireConn(true); try { mineConn.send({t: "p", p: mine}); } catch {} });
-    c.on("data", m => { if (m && m.t === "hp" && m.p && typeof m.p === "object") { hostP = m.p; rebuild(); } });
-    c.on("close", () => { if (c !== mineConn) return; r.fireConn(false); hostP = null; rebuild(); r.retry(); });
-    c.on("error", () => {});
-  };
-  r.retry = () => { clearTimeout(timer); timer = setTimeout(connect, 3500); };
-  r.presence = patch => {
-    mine = merge(mine, patch);
-    if (c && c.open) { try { c.send({t: "p", p: patch}); } catch {} }
-    rebuild(); return Promise.resolve();
-  };
-  connect(); rebuild();
+  r.fireConn = c => { if (connected === c) return; connected = c; L.c.forEach(f => { try { f(c); } catch (e) { console.error(e); } }); };
   return r;
 }
 function wire(r){
   r.onConnection(c => { if (c && H) publish(true); render(); });
   r.onPeers(() => { scanPeers(); if (H) hostTick(); render(); });
 }
+
+// host: try the servers in order until one connects, then stay on it (it reconnects by itself)
 function hostNet(c, tries){
-  if (!hasPeerJS()) { netErr = NOLIB; renderShare(); render(); return; }
-  code = c;
-  const peer = new Peer(PREFIX + c, Object.assign({debug: 0}, window.PK_PEER_OPTS || {}));
-  peerObj = peer;
-  renderShare();
-  peer.on("open", () => {
-    if (peerObj !== peer) return;
-    netErr = ""; room = hostRoom(peer); wire(room);
-    ls.set("pk.hostcode", c);
-    renderShare(); publish(true); render();
-  });
-  peer.on("disconnected", () => { if (!peer.destroyed) { try { peer.reconnect(); } catch {} } });
-  peer.on("error", e => {
-    if (e.type === "unavailable-id") {
-      peer.destroy();
-      if (tries < 5) setTimeout(() => hostNet(c, tries + 1), 3000); else hostNet(newCode(), 5);
-      return;
-    }
-    if (["network", "server-error", "socket-error", "socket-closed"].includes(e.type)) { netErr = "Lost touch with the connection service. Retrying…"; renderShare(); render(); }
-  });
+  if (!hasLib()) { netErr = NOLIB; renderShare(); render(); return; }
+  closeAll(); code = c; netErr = ""; renderShare();
+  const base = TOPIC(c), r = baseRoom(), ps = new Map();
+  let mine = {}, cl = null, idx = 0, lastSent = "";
+  const rebuild = () => {
+    r._snap = [{peer: "host", sameTab: true, isMe: true, presence: mine}]
+      .concat([...ps].map(([k, p]) => ({peer: k, sameTab: false, isMe: false, presence: p})));
+    r.firePeers();
+  };
+  const send = () => {
+    if (!cl || !cl.connected) return;
+    const txt = JSON.stringify(mine);
+    if (txt === lastSent) return; lastSent = txt;
+    cl.publish(base + "/host", txt, {retain: true, qos: 0});
+  };
+  r.presence = patch => { mine = merge(mine, patch); send(); rebuild(); return Promise.resolve(); };
+  const attempt = () => {
+    const url = BROKERS[idx % BROKERS.length], me1 = mqtt.connect(url, opts({topic: base + "/host", payload: "", retain: true, qos: 0}));
+    clients = [me1];
+    let opened = false;
+    const fail = setTimeout(() => { if (!opened) { try { me1.end(true); } catch {} idx++; attempt(); } }, 10000);
+    me1.on("connect", () => {
+      opened = true; clearTimeout(fail); cl = me1; lastSent = "";
+      me1.subscribe(base + "/p/+", {qos: 0});
+      netErr = ""; r.fireConn(true); send();
+      if (!room) { room = r; wire(r); ls.set("pk.hostcode", c); publish(true); }
+      renderShare(); render();
+    });
+    me1.on("message", (t, pl) => {
+      const k = t.split("/").pop(), m = dec(pl);
+      if (m && typeof m === "object") ps.set(k, m); else ps.delete(k);
+      rebuild();
+    });
+    me1.on("offline", () => { if (cl === me1) { r.fireConn(false); netErr = "Lost the connection. Reconnecting…"; renderShare(); render(); } });
+    me1.on("error", () => {});
+  };
+  rebuild(); attempt();
 }
+
+// phone: listen on every server at once and stay with the one where the host's table is
 function startJoin(c){
-  if (!hasPeerJS()) { netErr = NOLIB; render(); return; }
-  try { if (peerObj) peerObj.destroy(); } catch {}
-  room = null; connected = false;
+  if (!hasLib()) { netErr = NOLIB; render(); return; }
+  closeAll(); room = null; connected = false; G = null; hostPeer = null;
   code = c; netErr = ""; ls.set("pk.code", c);
   mode = "player"; ls.set("pk.joined", "1");
-  const peer = new Peer(undefined, Object.assign({debug: 0}, window.PK_PEER_OPTS || {}));
-  peerObj = peer;
-  peer.on("open", () => {
-    if (peerObj !== peer) return;
-    if (!room) { room = playerRoom(peer, PREFIX + c); wire(room); }
-    room.presence({pid: me.pid, n: me.name, want: 1});
+  const base = TOPIC(c), r = baseRoom();
+  myTopic = base + "/p/" + me.pid;
+  let mine = {}, hostP = null, chosen = null;
+  const rebuild = () => {
+    r._snap = [{peer: "me", sameTab: true, isMe: true, presence: mine}]
+      .concat(hostP ? [{peer: "host", sameTab: false, isMe: false, presence: hostP}] : []);
+    r.firePeers();
+  };
+  const send = () => { if (chosen && chosen.connected) chosen.publish(myTopic, JSON.stringify(mine), {retain: true, qos: 0}); };
+  r.presence = patch => { mine = merge(mine, patch); send(); rebuild(); return Promise.resolve(); };
+  BROKERS.forEach(url => {
+    const cl = mqtt.connect(url, opts({topic: myTopic, payload: "", retain: true, qos: 0}));
+    clients.push(cl);
+    cl.on("connect", () => { cl.subscribe(base + "/host", {qos: 0}); if (cl === chosen) { r.fireConn(true); send(); } });
+    cl.on("message", (t, pl) => {
+      const m = dec(pl);
+      if (!chosen) {
+        if (!m) return;
+        chosen = cl; clearTimeout(lookTimer);
+        clients.filter(x => x !== cl).forEach(x => { try { x.end(true); } catch {} });
+        clients = [cl];
+        r.fireConn(true); send();
+      }
+      if (cl !== chosen) return;
+      hostP = m && typeof m === "object" ? m : null;
+      netErr = hostP ? "" : "The host's screen closed. Waiting for it to come back…";
+      rebuild(); render();
+    });
+    cl.on("offline", () => { if (cl === chosen) { r.fireConn(false); render(); } });
+    cl.on("error", () => {});
   });
-  peer.on("disconnected", () => { if (!peer.destroyed) { try { peer.reconnect(); } catch {} } });
-  peer.on("error", e => {
-    if (e.type === "peer-unavailable") { netErr = `No open table with code ${c}. Check the code with the host. Trying again…`; if (room) room.retry(); }
-    else if (["network", "server-error", "socket-error", "socket-closed"].includes(e.type)) netErr = "Connection problem. Retrying…";
-    render();
-  });
+  lookTimer = setTimeout(() => { if (!chosen) { netErr = `No open table with code ${c} yet. Check the code with the host. Still looking…`; render(); } }, 9000);
+  room = r; wire(r);
+  r.presence({pid: me.pid, n: me.name, want: 1});
   render();
 }
 function renderShare(){
